@@ -1,8 +1,5 @@
 // to maintain list of all servers
-const servers = ['server1']
-
-// list of all free servers
-const availableServers = ['server1'];
+const serverInfo = {};
 
 //list of servers that were requested to remove
 const removeRequested = [];
@@ -15,7 +12,6 @@ const tasks = {};
 
 // list of deleted server
 const deletedServer = [];
-
 
 let totalTasks = 0;
 
@@ -74,7 +70,7 @@ function showError(error, id) {
 }
 
 
-function addServerToThelist(serverName,serverId, isError) {
+function addServerToThelist(serverId, serverName) {
     const element = document.getElementById("server");
     
     const divElem  = createNewElement({ elementType: 'div',className: 'serverName', id: serverId });
@@ -125,56 +121,63 @@ function addTaskToThelist(taskName, id) {
     element.appendChild(topDiv);
 }
 
+function startServer (name,id) {
+    let intervalId;
+    addServerToThelist(id, name);
+    (function(id){
+        intervalId = setInterval(() => {
+            if(serverInfo[id].available && queuedTasks.length) {
+                serverInfo[id].available = false;
+                const currentTask = queuedTasks.shift();
+
+                startTask(currentTask, name, id);
+            } 
+        },1000)
+    }(id));
+    serverInfo[id] = {
+        intervalId,
+        available: true 
+    };
+} 
+
 window.onload = function() {
-    if(servers.length === 1) {
-        addServerToThelist('Server 1', 'server1');
+    if(Object.keys(serverInfo).length === 0) {    
+        startServer('Server 1', 'server1')
     }
   };
+
 function addServer () {
 
-    const serverCount = servers.length;
+    const serverCount = Object.keys(serverInfo).length + 1;
 
-    if(serverCount > 9) {
+    if(serverCount > 10) {
         showError("Cannot add more than 10 servers", 'serverError')
         return;
     }
 
     const useDeletedName = deletedServer.length;
     // if we have deleted a server, use that name to create anew one
-    const serverName = useDeletedName ? deletedServer.pop() : `server${serverCount+1}`;
+    const serverName = useDeletedName ? deletedServer.pop() : `server${serverCount}`;
     
-    servers.push(serverName);
-    availableServers.push(serverName);
-    const serverNumber = useDeletedName ? serverName.replace("server", "") : serverCount + 1;
+    const serverNumber = useDeletedName ? serverName.replace("server", "") : serverCount;
 
     const text = `Server ${serverNumber}`;
-    addServerToThelist(text,serverName);
 
-    if(queuedTasks.length) {
-        const intId = setInterval(()=> {
-            if(availableServers.length) { 
-                startTask();
-                clearInterval(intId);
-            }
-        }, 3000)
-    }
-
+    startServer(text, serverName);
 }
 
 
 function deleteServer (server) {
-    const findServerIndex = servers.findIndex(item => item === server);
-    servers.splice(findServerIndex,1)
-    availableServers.splice(findServerIndex,1);
 
+    clearInterval(serverInfo[server].intervalId);
     deletedServer.push(server);
 
     const findRemoveIndex = removeRequested.findIndex(item => item === server);
     removeRequested.splice(findRemoveIndex,1)
 
-    // serverCount--;
     var element = document.getElementById(server);
     element.remove();
+    delete serverInfo[server];
     return;
 }
 
@@ -186,7 +189,7 @@ function removeServer () {
         return;
     }
 
-    if(servers.length === 1) {
+    if(Object.keys(serverInfo).length === 1) {
         showError("Can't delete last server", "lastServer");
         return;
     }
@@ -194,7 +197,7 @@ function removeServer () {
     const server = selected.value;
     removeRequested.push(server);
 
-    if(availableServers.includes(server)) {  
+    if(serverInfo[server].available) {  
         deleteServer(server);
         return;
     }
@@ -202,7 +205,7 @@ function removeServer () {
     showError("Can't delete! Server is busy.", "removeError");
 
     const intervalId = setInterval(()=> {
-        if(availableServers.includes(server)) {
+        if(serverInfo[server].available) {
             deleteServer(server);
             const element = document.getElementById("removeError");
             element.remove();
@@ -246,31 +249,17 @@ function progressBar (task, currentTask, currentServerName) {
     }
 }
 
-function startTask() {
-    const newAvailableServer = [ ...availableServers ];
-
-    for (const i in newAvailableServer) {
-        if(!newAvailableServer[i]) break;
-        if(!queuedTasks.length) break;
-
-        // If that server is requested to be removed, don't start a task on it
-        if(removeRequested.includes(newAvailableServer[i])) continue; 
-
-        const currentServer = availableServers.shift();
-        const currentTask = queuedTasks.shift();        
-        const divEl = document.getElementById(`${currentTask}-text`);
-
-        const serverName = `Server ${currentServer.replace("server","")}`;
-        divEl.textContent = ` ${tasks[currentTask].name} | Status: In Progress | Server Allocated : ${serverName}`;
-        progressBar(tasks[currentTask], currentTask, serverName);
-        removeDeleteIcon(currentTask);
-
-        (function(serverSelected){
-            setTimeout(() => {
-                availableServers.push(serverSelected);
-            },20000);
-        }(currentServer,currentTask));
-    };
+function startTask(currentTask, serverName, serverId) {
+        
+    const divEl = document.getElementById(`${currentTask}-text`);
+    divEl.textContent = ` ${tasks[currentTask].name} | Status: In Progress | Server Allocated : ${serverName}`;
+    progressBar(tasks[currentTask], currentTask, serverName);
+    removeDeleteIcon(currentTask);
+    (function(serverSelected){
+        setTimeout(() => {
+            serverInfo[serverSelected].available = true;
+        },20000);
+    }(serverId));
 }
 
 function addTask () {
@@ -286,18 +275,5 @@ function addTask () {
         };
         queuedTasks.push(`task${totalTasks}`);        
         addTaskToThelist(name, id, tasks);
-    }
-
-    startTask(totalTasks);  
-
-    for (let i = 0; i < queuedTasks.length; i++) {
-        if(queuedTasks.length) {
-            const intId = setInterval(()=> {
-                if(availableServers.length) { 
-                    startTask(totalTasks);
-                    clearInterval(intId);
-                }
-            }, 3000)
-        }
     }
 }
