@@ -123,21 +123,55 @@ function addTaskToThelist(taskName, id) {
 
 function startServer (name,id) {
     let intervalId;
+    serverInfo[id] = {
+        serverName: name,
+        available: true 
+    };
     addServerToThelist(id, name);
+    let width = 5;
+    let time = 20;
+    let task;
+    let i =1;
     (function(id){
         intervalId = setInterval(() => {
+
             if(serverInfo[id].available && queuedTasks.length) {
                 serverInfo[id].available = false;
                 const currentTask = queuedTasks.shift();
+                task = currentTask;
 
                 startTask(currentTask, name, id);
+                width = 5;
+                time = 20;
+                i=1;
             } 
+
+            if(!serverInfo[id].available && task && i<=20) {
+
+                const elem = document.getElementById(tasks[task].name);
+
+                if (width >= 100 && !queuedTasks.includes(task)) {
+
+                elem.style.width = `${width}%`;
+                elem.innerHTML = `completed`;
+
+                serverInfo[id].available = true;
+                const divEl = document.getElementById(`${task}-text`);
+                divEl.textContent = `${tasks[task].name} | Status: Completed | Server Allocated : ${serverInfo[id].serverName}`;
+
+                } else if(width < 100) {
+                    width +=5 ;
+                    time--;
+                    const timeString = time >= 10 ? time: `0${time}`;
+                    elem.style.width = width + "%";
+                    elem.innerHTML = `00:${timeString}`;
+                }
+                i++;
+            }
         },1000)
     }(id));
-    serverInfo[id] = {
-        intervalId,
-        available: true 
-    };
+    serverInfo[id].intervalId = intervalId;
+
 } 
 
 window.onload = function() {
@@ -214,52 +248,11 @@ function removeServer () {
     },1000)
 }
 
-function progressBar (task, currentTask, currentServerName) {
-    let i = 0;
-    if (i == 0) {
-        i = 1;
-
-        const elem = document.getElementById(task.name);
-
-        let width = 5;
-        let time = 20;
-        const id = setInterval(frame, 1000);
-        function frame() {
-
-          if (width >= 100 && !queuedTasks.includes(task)) {
-
-            elem.style.width = `${width}%`;
-            elem.innerHTML = `completed`;
-
-
-            const divEl = document.getElementById(`${currentTask}-text`);
-            divEl.textContent = `${task.name} | Status: Completed | Server Allocated : ${currentServerName}`;
-            
-            clearInterval(id);
-
-            i = 0;
-          } else if(width < 100) {
-                width +=5 ;
-                time--;
-                const timeString = time >= 10 ? time: `0${time}`;
-                elem.style.width = width + "%";
-                elem.innerHTML = `00:${timeString}`;
-            }
-      }
-    }
-}
-
 function startTask(currentTask, serverName, serverId) {
         
     const divEl = document.getElementById(`${currentTask}-text`);
     divEl.textContent = ` ${tasks[currentTask].name} | Status: In Progress | Server Allocated : ${serverName}`;
-    progressBar(tasks[currentTask], currentTask, serverName);
     removeDeleteIcon(currentTask);
-    (function(serverSelected){
-        setTimeout(() => {
-            serverInfo[serverSelected].available = true;
-        },20000);
-    }(serverId));
 }
 
 function addTask () {
