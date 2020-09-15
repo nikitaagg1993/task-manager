@@ -1,8 +1,5 @@
 // to maintain list of all servers
-const servers = ['server1']
-
-// list of all free servers
-const availableServers = ['server1'];
+const serverInfo = {};
 
 //list of servers that were requested to remove
 const removeRequested = [];
@@ -15,7 +12,6 @@ const tasks = {};
 
 // list of deleted server
 const deletedServer = [];
-
 
 let totalTasks = 0;
 
@@ -74,7 +70,7 @@ function showError(error, id) {
 }
 
 
-function addServerToThelist(serverName,serverId, isError) {
+function addServerToThelist(serverId, serverName) {
     const element = document.getElementById("server");
     
     const divElem  = createNewElement({ elementType: 'div',className: 'serverName', id: serverId });
@@ -125,56 +121,97 @@ function addTaskToThelist(taskName, id) {
     element.appendChild(topDiv);
 }
 
+function startServer (name,id) {
+    let intervalId;
+    serverInfo[id] = {
+        serverName: name,
+        available: true 
+    };
+    addServerToThelist(id, name);
+    let width = 5;
+    let time = 20;
+    let task;
+    let i =1;
+    (function(id){
+        intervalId = setInterval(() => {
+
+            if(serverInfo[id].available && queuedTasks.length) {
+                serverInfo[id].available = false;
+                const currentTask = queuedTasks.shift();
+                task = currentTask;
+
+                startTask(currentTask, name, id);
+                width = 5;
+                time = 20;
+                i=1;
+            } 
+
+            if(!serverInfo[id].available && task && i<=20) {
+
+                const elem = document.getElementById(tasks[task].name);
+
+                if (width >= 100 && !queuedTasks.includes(task)) {
+
+                elem.style.width = `${width}%`;
+                elem.innerHTML = `completed`;
+
+                serverInfo[id].available = true;
+                const divEl = document.getElementById(`${task}-text`);
+                divEl.textContent = `${tasks[task].name} | Status: Completed | Server Allocated : ${serverInfo[id].serverName}`;
+
+                } else if(width < 100) {
+                    width +=5 ;
+                    time--;
+                    const timeString = time >= 10 ? time: `0${time}`;
+                    elem.style.width = width + "%";
+                    elem.innerHTML = `00:${timeString}`;
+                }
+                i++;
+            }
+        },1000)
+    }(id));
+    serverInfo[id].intervalId = intervalId;
+
+} 
+
 window.onload = function() {
-    if(servers.length === 1) {
-        addServerToThelist('Server 1', 'server1');
+    if(Object.keys(serverInfo).length === 0) {    
+        startServer('Server 1', 'server1')
     }
   };
+
 function addServer () {
 
-    const serverCount = servers.length;
+    const serverCount = Object.keys(serverInfo).length + 1;
 
-    if(serverCount > 9) {
+    if(serverCount > 10) {
         showError("Cannot add more than 10 servers", 'serverError')
         return;
     }
 
     const useDeletedName = deletedServer.length;
     // if we have deleted a server, use that name to create anew one
-    const serverName = useDeletedName ? deletedServer.pop() : `server${serverCount+1}`;
+    const serverName = useDeletedName ? deletedServer.pop() : `server${serverCount}`;
     
-    servers.push(serverName);
-    availableServers.push(serverName);
-    const serverNumber = useDeletedName ? serverName.replace("server", "") : serverCount + 1;
+    const serverNumber = useDeletedName ? serverName.replace("server", "") : serverCount;
 
     const text = `Server ${serverNumber}`;
-    addServerToThelist(text,serverName);
 
-    if(queuedTasks.length) {
-        const intId = setInterval(()=> {
-            if(availableServers.length) { 
-                startTask();
-                clearInterval(intId);
-            }
-        }, 3000)
-    }
-
+    startServer(text, serverName);
 }
 
 
 function deleteServer (server) {
-    const findServerIndex = servers.findIndex(item => item === server);
-    servers.splice(findServerIndex,1)
-    availableServers.splice(findServerIndex,1);
 
+    clearInterval(serverInfo[server].intervalId);
     deletedServer.push(server);
 
     const findRemoveIndex = removeRequested.findIndex(item => item === server);
     removeRequested.splice(findRemoveIndex,1)
 
-    // serverCount--;
     var element = document.getElementById(server);
     element.remove();
+    delete serverInfo[server];
     return;
 }
 
@@ -186,7 +223,7 @@ function removeServer () {
         return;
     }
 
-    if(servers.length === 1) {
+    if(Object.keys(serverInfo).length === 1) {
         showError("Can't delete last server", "lastServer");
         return;
     }
@@ -194,7 +231,7 @@ function removeServer () {
     const server = selected.value;
     removeRequested.push(server);
 
-    if(availableServers.includes(server)) {  
+    if(serverInfo[server].available) {  
         deleteServer(server);
         return;
     }
@@ -202,7 +239,7 @@ function removeServer () {
     showError("Can't delete! Server is busy.", "removeError");
 
     const intervalId = setInterval(()=> {
-        if(availableServers.includes(server)) {
+        if(serverInfo[server].available) {
             deleteServer(server);
             const element = document.getElementById("removeError");
             element.remove();
@@ -211,66 +248,11 @@ function removeServer () {
     },1000)
 }
 
-function progressBar (task, currentTask, currentServerName) {
-    let i = 0;
-    if (i == 0) {
-        i = 1;
-
-        const elem = document.getElementById(task.name);
-
-        let width = 5;
-        let time = 20;
-        const id = setInterval(frame, 1000);
-        function frame() {
-
-          if (width >= 100 && !queuedTasks.includes(task)) {
-
-            elem.style.width = `${width}%`;
-            elem.innerHTML = `completed`;
-
-
-            const divEl = document.getElementById(`${currentTask}-text`);
-            divEl.textContent = `${task.name} | Status: Completed | Server Allocated : ${currentServerName}`;
-            
-            clearInterval(id);
-
-            i = 0;
-          } else if(width < 100) {
-                width +=5 ;
-                time--;
-                const timeString = time >= 10 ? time: `0${time}`;
-                elem.style.width = width + "%";
-                elem.innerHTML = `00:${timeString}`;
-            }
-      }
-    }
-}
-
-function startTask() {
-    const newAvailableServer = [ ...availableServers ];
-
-    for (const i in newAvailableServer) {
-        if(!newAvailableServer[i]) break;
-        if(!queuedTasks.length) break;
-
-        // If that server is requested to be removed, don't start a task on it
-        if(removeRequested.includes(newAvailableServer[i])) continue; 
-
-        const currentServer = availableServers.shift();
-        const currentTask = queuedTasks.shift();        
-        const divEl = document.getElementById(`${currentTask}-text`);
-
-        const serverName = `Server ${currentServer.replace("server","")}`;
-        divEl.textContent = ` ${tasks[currentTask].name} | Status: In Progress | Server Allocated : ${serverName}`;
-        progressBar(tasks[currentTask], currentTask, serverName);
-        removeDeleteIcon(currentTask);
-
-        (function(serverSelected){
-            setTimeout(() => {
-                availableServers.push(serverSelected);
-            },20000);
-        }(currentServer,currentTask));
-    };
+function startTask(currentTask, serverName, serverId) {
+        
+    const divEl = document.getElementById(`${currentTask}-text`);
+    divEl.textContent = ` ${tasks[currentTask].name} | Status: In Progress | Server Allocated : ${serverName}`;
+    removeDeleteIcon(currentTask);
 }
 
 function addTask () {
@@ -286,18 +268,5 @@ function addTask () {
         };
         queuedTasks.push(`task${totalTasks}`);        
         addTaskToThelist(name, id, tasks);
-    }
-
-    startTask(totalTasks);  
-
-    for (let i = 0; i < queuedTasks.length; i++) {
-        if(queuedTasks.length) {
-            const intId = setInterval(()=> {
-                if(availableServers.length) { 
-                    startTask(totalTasks);
-                    clearInterval(intId);
-                }
-            }, 3000)
-        }
     }
 }
